@@ -1,5 +1,5 @@
-import { Prop, Schema, SchemaFactory } from "@nestjs/mongoose";
-import { Document, Types } from "mongoose";
+import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
+import { Document, Types } from 'mongoose';
 
 export type EntityTypeDocument = EntityType & Document;
 
@@ -14,7 +14,7 @@ export class EntityType {
   @Prop({ required: true })
   color: string;
 
-  @Prop({ type: Types.ObjectId, ref: "User", required: true })
+  @Prop({ type: Types.ObjectId, ref: 'User', required: true })
   userId: Types.ObjectId;
 
   @Prop({ required: true, default: true })

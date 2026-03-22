@@ -22,7 +22,7 @@ export class RemoteAuthService {
   async logRemoteAuthGridFsInfo(session: string): Promise<void> {
     try {
       if (!this.mongooseConnection.db) {
-        this.logger.error('Database connection is not initialized')
+        this.logger.error('Database connection is not initialized');
         throw new Error('Database connection is not initialized');
       }
 
@@ -40,8 +40,8 @@ export class RemoteAuthService {
       const length = latestDoc?.length;
       this.logger.debug(
         `[SERVICE] RemoteAuth GridFS info: session=${session}, filesCount=${count}, latestUploadDate=${
-          uploadDate ? new Date(uploadDate).toISOString() : "none"
-        }${typeof length === "number" ? `, latestSize=${length}` : ""}`,
+          uploadDate ? new Date(uploadDate).toISOString() : 'none'
+        }${typeof length === 'number' ? `, latestSize=${length}` : ''}`,
       );
     } catch (e) {
       this.logger.warn(
@@ -55,7 +55,7 @@ export class RemoteAuthService {
   async ensureAuthClientId(sessionId: string): Promise<string> {
     const doc = await this.sessionModel
       .findOne({ sessionId })
-      .select("authClientId")
+      .select('authClientId')
       .lean();
     return (doc as any)?.authClientId || sessionId;
   }
@@ -73,7 +73,7 @@ export class RemoteAuthService {
 
     this.remoteAuthStore = new MongoStore({ mongoose: mongooseLike as any });
     this.instrumentRemoteAuthStore(this.remoteAuthStore);
-    this.logger.log("[SERVICE] RemoteAuth store initialized (MongoStore)");
+    this.logger.log('[SERVICE] RemoteAuth store initialized (MongoStore)');
     return this.remoteAuthStore;
   }
 
@@ -84,7 +84,7 @@ export class RemoteAuthService {
 
     try {
       const originalSave =
-        typeof store.save === "function" ? store.save.bind(store) : null;
+        typeof store.save === 'function' ? store.save.bind(store) : null;
       if (originalSave) {
         store.save = async (options: any) => {
           const sessionName = options?.session;
@@ -95,7 +95,7 @@ export class RemoteAuthService {
             const size = exists ? fsSync.statSync(zipPath).size : undefined;
             this.logger.log(
               `[REMOTE_AUTH_STORE] save(start) session=${sessionName}, zipExists=${exists}${
-                typeof size === "number" ? `, zipSize=${size}` : ""
+                typeof size === 'number' ? `, zipSize=${size}` : ''
               }`,
             );
           } catch {
@@ -125,7 +125,7 @@ export class RemoteAuthService {
       }
 
       const originalExtract =
-        typeof store.extract === "function" ? store.extract.bind(store) : null;
+        typeof store.extract === 'function' ? store.extract.bind(store) : null;
       if (originalExtract) {
         store.extract = async (options: any) => {
           const sessionName = options?.session;

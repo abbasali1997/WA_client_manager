@@ -266,9 +266,7 @@ export class WhatsappService implements OnModuleInit, OnModuleDestroy {
 
     const initPromise = (async () => {
       this.sessionService.initializingSessions.add(sessionId);
-      if (
-        this.cleanupInProgress.has(sessionId)
-      ) {
+      if (this.cleanupInProgress.has(sessionId)) {
         this.logger.warn(
           `[SERVICE] Cleanup in progress for ${sessionId}; delaying init`,
         );
@@ -551,12 +549,12 @@ export class WhatsappService implements OnModuleInit, OnModuleDestroy {
             this.logger.warn(
               `[SERVICE] Launch failed; attempting to clean session files and retry: ${sessionId}`,
             );
-            this.cleanupInProgress.add(sessionId)
+            this.cleanupInProgress.add(sessionId);
             try {
               const pid = this.getClientBrowserPid(client);
               if (pid) {
-                await killProcessTree(pid).catch(e => {
-                  this.logger.error(e.message)
+                await killProcessTree(pid).catch((e) => {
+                  this.logger.error(e.message);
                 });
               }
               const cleaned =
@@ -574,7 +572,7 @@ export class WhatsappService implements OnModuleInit, OnModuleDestroy {
               );
               this.cleanupFailed.add(sessionId);
             } finally {
-              this.cleanupInProgress.delete(sessionId)
+              this.cleanupInProgress.delete(sessionId);
             }
             await new Promise((resolve) => setTimeout(resolve, 1500));
 
@@ -792,7 +790,10 @@ export class WhatsappService implements OnModuleInit, OnModuleDestroy {
         this.logger.log(
           `WhatsApp client authenticated for session: ${sessionId}`,
         );
-        await this.sessionService.updateSessionStatus(sessionId, SessionStatus.AUTHENTICATED);
+        await this.sessionService.updateSessionStatus(
+          sessionId,
+          SessionStatus.AUTHENTICATED,
+        );
       } catch (error) {
         this.logger.error(
           `Error handling authentication for session ${sessionId}:`,

@@ -25,10 +25,9 @@
     "paths": {
       "@/*": ["src/*"],
       "@/schemas/*": ["src/schemas/*"],
-      "@/common/*": ["src/services/*"],
-      "@/modules/*": ["src/modules/*"],
+      "@/services/*": ["src/services/*"],
       "@/config/*": ["src/config/*"]
     }
   },
-  "include": ["src/apps/api/**/*", "src/common/**/*", "src/config/**/*", "src/modules/**/*"]
+  "include": ["src/**/*", "test/**/*"]
 }

@@ -1,31 +1,31 @@
-import { Prop, Schema, SchemaFactory } from "@nestjs/mongoose";
-import { Document, Types } from "mongoose";
+import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
+import { Document, Types } from 'mongoose';
 
 export type MessageDocument = Message & Document;
 
 export enum MessageType {
-  TEXT = "text",
-  IMAGE = "image",
-  VIDEO = "video",
-  AUDIO = "audio",
-  DOCUMENT = "document",
-  LOCATION = "location",
-  CONTACT = "contact",
-  STICKER = "sticker",
-  CALL = "call",
+  TEXT = 'text',
+  IMAGE = 'image',
+  VIDEO = 'video',
+  AUDIO = 'audio',
+  DOCUMENT = 'document',
+  LOCATION = 'location',
+  CONTACT = 'contact',
+  STICKER = 'sticker',
+  CALL = 'call',
 }
 
 export enum MessageStatus {
-  PENDING = "pending",
-  SENT = "sent",
-  DELIVERED = "delivered",
-  READ = "read",
-  FAILED = "failed",
+  PENDING = 'pending',
+  SENT = 'sent',
+  DELIVERED = 'delivered',
+  READ = 'read',
+  FAILED = 'failed',
 }
 
 export enum MessageDirection {
-  INBOUND = "inbound",
-  OUTBOUND = "outbound",
+  INBOUND = 'inbound',
+  OUTBOUND = 'outbound',
 }
 
 @Schema({ timestamps: true })
@@ -105,7 +105,7 @@ export class Message {
   @Prop({ type: String })
   conversationId: string; // Group messages by conversation
 
-  @Prop({ type: Types.ObjectId, ref: "Message" })
+  @Prop({ type: Types.ObjectId, ref: 'Message' })
   replyToMessageId: Types.ObjectId; // If this is a reply
 
   @Prop({ type: Object })
@@ -119,20 +119,20 @@ export class Message {
   }; // Populated reply message details
 
   // Campaign Tracking
-  @Prop({ type: Types.ObjectId, ref: "Campaign" })
+  @Prop({ type: Types.ObjectId, ref: 'Campaign' })
   campaignId: Types.ObjectId;
 
   @Prop({ type: String })
   templateName: string; // If sent via template
 
   // Entity & Tenant
-  @Prop({ type: Types.ObjectId, ref: "Entity", required: true })
+  @Prop({ type: Types.ObjectId, ref: 'Entity', required: true })
   entityId: Types.ObjectId;
 
   @Prop({ type: [Types.ObjectId], default: [] })
   entityIdPath: Types.ObjectId[]; // Array of entity IDs representing the path from root to leaf
 
-  @Prop({ type: Types.ObjectId, ref: "Entity", required: true })
+  @Prop({ type: Types.ObjectId, ref: 'Entity', required: true })
   tenantId: Types.ObjectId;
 
   // External Number Detection

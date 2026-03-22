@@ -1,11 +1,8 @@
-import {
-  Injectable,
-  NotFoundException,
-} from "@nestjs/common";
-import { InjectModel } from "@nestjs/mongoose";
-import { Model, Types } from "mongoose";
-import { Entity } from "@/schemas/entity.schema";
-import { EntityType as CustomEntityType } from "@/schemas/entity-type.schema";
+import { Injectable, NotFoundException } from '@nestjs/common';
+import { InjectModel } from '@nestjs/mongoose';
+import { Model, Types } from 'mongoose';
+import { Entity } from '@/schemas/entity.schema';
+import { EntityType as CustomEntityType } from '@/schemas/entity-type.schema';
 
 @Injectable()
 export class EntitiesService {
@@ -27,7 +24,7 @@ export class EntitiesService {
     }
 
     // Populate customEntityTypeId if type is custom
-    if (entity.type === "custom" && entity.customEntityTypeId) {
+    if (entity.type === 'custom' && entity.customEntityTypeId) {
       const customEntityType = await this.entityTypeModel.findById(
         entity.customEntityTypeId,
       );

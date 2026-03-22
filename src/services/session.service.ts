@@ -1,8 +1,11 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { forwardRef, Inject, Injectable, Logger } from '@nestjs/common';
 import { ClientService } from './client.service';
 import os from 'os';
 import { InjectModel } from '@nestjs/mongoose';
-import { SessionStatus, WhatsAppSession } from '../schemas/whatsapp-session.schema';
+import {
+  SessionStatus,
+  WhatsAppSession,
+} from '../schemas/whatsapp-session.schema';
 import { Model } from 'mongoose';
 import { User, WhatsAppConnectionStatus } from '../schemas/user.schema';
 import { RemoteAuthService } from './remoteAuth.service';
@@ -29,6 +32,7 @@ export class SessionService {
     this.initializingSessions.has(sessionId);
 
   constructor(
+    @Inject(forwardRef(() => ClientService))
     private readonly clientService: ClientService,
     private readonly remoteAuthService: RemoteAuthService,
     @InjectModel(WhatsAppSession.name)
@@ -122,7 +126,7 @@ export class SessionService {
               },
               { new: true },
             )
-            .select("userId")
+            .select('userId')
             .lean();
 
           if ((session as any)?.userId) {
@@ -157,7 +161,7 @@ export class SessionService {
               },
               { new: true },
             )
-            .select("userId")
+            .select('userId')
             .lean();
 
           if ((session as any)?.userId) {
@@ -226,16 +230,17 @@ export class SessionService {
       { sessionId, connectionOwner: this.connectionOwnerId },
       {
         $unset: {
-          connectionOwner: "",
-          connectionOwnerExpiresAt: "",
-          connectionOwnerHeartbeatAt: "",
+          connectionOwner: '',
+          connectionOwnerExpiresAt: '',
+          connectionOwnerHeartbeatAt: '',
         },
       },
     );
   }
 
   async cleanupSessionFilesForSession(sessionId: string): Promise<boolean> {
-    const currentClientId = await this.remoteAuthService.ensureAuthClientId(sessionId);
+    const currentClientId =
+      await this.remoteAuthService.ensureAuthClientId(sessionId);
     const candidates = Array.from(new Set([currentClientId, sessionId])).filter(
       Boolean,
     );
@@ -283,8 +288,8 @@ export class SessionService {
     return (
       Number(
         this.configService.get<string>(
-          "whatsapp.sessionLockTtlMs",
-          process.env.WHATSAPP_SESSION_LOCK_TTL_MS || "300000",
+          'whatsapp.sessionLockTtlMs',
+          process.env.WHATSAPP_SESSION_LOCK_TTL_MS || '300000',
         ),
       ) || 300000
     );
@@ -294,8 +299,8 @@ export class SessionService {
     return (
       Number(
         this.configService.get<string>(
-          "whatsapp.sessionLockRefreshIntervalMs",
-          process.env.WHATSAPP_SESSION_LOCK_REFRESH_INTERVAL_MS || "60000",
+          'whatsapp.sessionLockRefreshIntervalMs',
+          process.env.WHATSAPP_SESSION_LOCK_REFRESH_INTERVAL_MS || '60000',
         ),
       ) || 60000
     );
@@ -303,8 +308,8 @@ export class SessionService {
 
   private async cleanupSessionFilesByClientId(
     clientId: string,
-    maxRetries = os.platform() === "win32" ? 12 : 5,
-    retryDelay = os.platform() === "win32" ? 2000 : 2000,
+    maxRetries = os.platform() === 'win32' ? 12 : 5,
+    retryDelay = os.platform() === 'win32' ? 2000 : 2000,
   ): Promise<boolean> {
     const authPath =
       process.env.WWEBJS_AUTH_PATH || `${process.cwd()}/.wwebjs_auth`;
@@ -321,7 +326,7 @@ export class SessionService {
         if (!existing.length) {
           this.logger.debug(
             `Session directory does not exist, nothing to clean: ${sessionPaths.join(
-              ", ",
+              ', ',
             )}`,
           );
           return true;
@@ -340,9 +345,9 @@ export class SessionService {
         return true;
       } catch (error: any) {
         const isRetryable =
-          error?.code === "EBUSY" ||
-          error?.code === "EPERM" ||
-          error?.code === "ENOTEMPTY";
+          error?.code === 'EBUSY' ||
+          error?.code === 'EPERM' ||
+          error?.code === 'ENOTEMPTY';
 
         if (isRetryable && attempt < maxRetries) {
           this.logger.warn(
@@ -352,7 +357,7 @@ export class SessionService {
         } else {
           this.logger.warn(
             `Could not fully clean up session files for clientId=${clientId} after ${attempt} attempts: ${error?.message || error}. ` +
-            `Files may need manual cleanup under: ${authPath}`,
+              `Files may need manual cleanup under: ${authPath}`,
           );
           return false;
         }

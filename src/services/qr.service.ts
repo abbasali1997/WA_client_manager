@@ -6,16 +6,16 @@ import {
   SubscribeMessage,
   WebSocketGateway,
   WebSocketServer,
-} from "@nestjs/websockets";
-import { Inject, Logger, forwardRef } from "@nestjs/common";
-import { Server, Socket } from "socket.io";
-import { InjectModel } from "@nestjs/mongoose";
-import { Model } from "mongoose";
+} from '@nestjs/websockets';
+import { Inject, Logger, forwardRef } from '@nestjs/common';
+import { Server, Socket } from 'socket.io';
+import { InjectModel } from '@nestjs/mongoose';
+import { Model } from 'mongoose';
 import {
   WhatsAppSession,
   WhatsAppSessionDocument,
   SessionStatus,
-} from "@/schemas/whatsapp-session.schema";
+} from '@/schemas/whatsapp-session.schema';
 import { WhatsappService } from './whatsapp.service';
 import { SessionService } from './session.service';
 
@@ -24,9 +24,9 @@ interface SubscriptionPayload {
 }
 
 @WebSocketGateway({
-  namespace: "/qr",
+  namespace: '/qr',
   cors: {
-    origin: "*",
+    origin: '*',
     credentials: true,
   },
 })
@@ -59,7 +59,7 @@ export class QrGateway implements OnGatewayConnection, OnGatewayDisconnect {
   handleConnection(client: Socket) {
     const totalClients = this.server?.engine?.clientsCount;
     const totalMessage =
-      typeof totalClients === "number"
+      typeof totalClients === 'number'
         ? `Client connected: ${client.id} (total: ${totalClients})`
         : `Client connected: ${client.id}`;
     this.logger.debug(totalMessage);
@@ -68,7 +68,7 @@ export class QrGateway implements OnGatewayConnection, OnGatewayDisconnect {
   handleDisconnect(client: Socket) {
     const totalClients = this.server?.engine?.clientsCount;
     const totalMessage =
-      typeof totalClients === "number"
+      typeof totalClients === 'number'
         ? `Client disconnected: ${client.id} (total: ${totalClients})`
         : `Client disconnected: ${client.id}`;
     this.logger.debug(totalMessage);
@@ -92,16 +92,16 @@ export class QrGateway implements OnGatewayConnection, OnGatewayDisconnect {
     }
   }
 
-  @SubscribeMessage("subscribe")
+  @SubscribeMessage('subscribe')
   async handleSubscribe(
     @ConnectedSocket() client: Socket,
     @MessageBody() payload: SubscriptionPayload,
   ) {
     const sessionId = this.normalizeSessionId(payload?.sessionId);
     if (!sessionId) {
-      client.emit("qr.status", {
-        status: "error",
-        message: "sessionId is required",
+      client.emit('qr.status', {
+        status: 'error',
+        message: 'sessionId is required',
       });
       return;
     }
@@ -129,15 +129,15 @@ export class QrGateway implements OnGatewayConnection, OnGatewayDisconnect {
       );
     }
 
-    client.emit("qr.status", {
+    client.emit('qr.status', {
       sessionId,
-      status: "subscribed",
+      status: 'subscribed',
     });
 
     await this.emitExistingSnapshot(client, sessionId);
   }
 
-  @SubscribeMessage("unsubscribe")
+  @SubscribeMessage('unsubscribe')
   handleUnsubscribe(
     @ConnectedSocket() client: Socket,
     @MessageBody() payload: SubscriptionPayload,
@@ -180,7 +180,7 @@ export class QrGateway implements OnGatewayConnection, OnGatewayDisconnect {
       return;
     }
     const room = this.getRoomName(normalizedId);
-    this.server?.to(room).emit("qr.update", {
+    this.server?.to(room).emit('qr.update', {
       sessionId: normalizedId,
       ...payload,
     });
@@ -192,7 +192,7 @@ export class QrGateway implements OnGatewayConnection, OnGatewayDisconnect {
       return;
     }
     const room = this.getRoomName(normalizedId);
-    this.server?.to(room).emit("qr.status", {
+    this.server?.to(room).emit('qr.status', {
       sessionId: normalizedId,
       ...payload,
     });
@@ -202,7 +202,7 @@ export class QrGateway implements OnGatewayConnection, OnGatewayDisconnect {
     try {
       const session = await this.sessionModel
         .findOne({ sessionId })
-        .select("qrCode qrCodeExpiresAt status")
+        .select('qrCode qrCodeExpiresAt status')
         .lean();
 
       if (!session) {
@@ -210,14 +210,14 @@ export class QrGateway implements OnGatewayConnection, OnGatewayDisconnect {
       }
 
       if (session.status) {
-        client.emit("qr.status", {
+        client.emit('qr.status', {
           sessionId,
           status: session.status,
         });
       }
 
       if (session.qrCode) {
-        client.emit("qr.update", {
+        client.emit('qr.update', {
           sessionId,
           qrCode: session.qrCode,
           expiresAt: session.qrCodeExpiresAt ?? null,
@@ -237,7 +237,7 @@ export class QrGateway implements OnGatewayConnection, OnGatewayDisconnect {
   }
 
   private normalizeSessionId(sessionId?: string): string | null {
-    if (!sessionId || typeof sessionId !== "string") {
+    if (!sessionId || typeof sessionId !== 'string') {
       return null;
     }
     return sessionId.trim();
@@ -300,7 +300,7 @@ export class QrGateway implements OnGatewayConnection, OnGatewayDisconnect {
         // session is not connected.
         const session = await this.sessionModel
           .findOne({ sessionId: normalizedId })
-          .select("status lastActivityAt")
+          .select('status lastActivityAt')
           .lean();
 
         if (!session) {

@@ -36,7 +36,9 @@ export class WhatsappController {
 
     this.logger.log(`Init request received for sessionId=${dto.sessionId}`);
 
-    await this.whatsappService.initializeClient(dto.sessionId);
+    void this.whatsappService.initializeClient(dto.sessionId).catch((error) => {
+      this.logger.error(error);
+    });
 
     return {
       success: true,

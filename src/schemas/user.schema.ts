@@ -1,5 +1,5 @@
-import { Prop, Schema, SchemaFactory } from "@nestjs/mongoose";
-import { Document, Types } from "mongoose";
+import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
+import { Document, Types } from 'mongoose';
 
 export type WhatsAppQR = {
   qrCode: string;
@@ -13,31 +13,31 @@ export type UserDocument = User &
   };
 
 export enum UserRole {
-  SYSTEM_ADMIN = "SystemAdmin",
-  TENANT_ADMIN = "TenantAdmin",
-  USER = "User",
+  SYSTEM_ADMIN = 'SystemAdmin',
+  TENANT_ADMIN = 'TenantAdmin',
+  USER = 'User',
 }
 
 export enum RegistrationStatus {
-  PENDING = "pending",
-  INVITED = "invited",
-  REGISTERED = "registered",
-  CANCELLED = "cancelled",
+  PENDING = 'pending',
+  INVITED = 'invited',
+  REGISTERED = 'registered',
+  CANCELLED = 'cancelled',
 }
 
 export enum WhatsAppConnectionStatus {
-  DISCONNECTED = "disconnected",
-  CONNECTING = "connecting",
-  CONNECTED = "connected",
-  FAILED = "failed",
+  DISCONNECTED = 'disconnected',
+  CONNECTING = 'connecting',
+  CONNECTED = 'connected',
+  FAILED = 'failed',
 }
 
 @Schema({ timestamps: true })
 export class UserPreferences {
-  @Prop({ default: "en" })
+  @Prop({ default: 'en' })
   language: string;
 
-  @Prop({ default: "UTC" })
+  @Prop({ default: 'UTC' })
   timezone: string;
 
   @Prop({ default: true })
@@ -103,19 +103,19 @@ export class User {
   @Prop({ type: Object, required: false })
   entity: Record<string, unknown>;
 
-  @Prop({ type: Types.ObjectId, ref: "Entity", required: true })
+  @Prop({ type: Types.ObjectId, ref: 'Entity', required: true })
   entityId: Types.ObjectId;
 
   @Prop({ required: true })
   entityPath: string;
 
-  @Prop({ type: [Types.ObjectId], ref: "Entity", default: [] })
+  @Prop({ type: [Types.ObjectId], ref: 'Entity', default: [] })
   entityIdPath: Types.ObjectId[]; // Array of all ancestor entity IDs from root to current entity
 
-  @Prop({ type: Types.ObjectId, ref: "Entity", required: false })
+  @Prop({ type: Types.ObjectId, ref: 'Entity', required: false })
   tenantId: Types.ObjectId; // Root/first ancestor entity ID for tenant isolation
 
-  @Prop({ type: Types.ObjectId, ref: "Entity" })
+  @Prop({ type: Types.ObjectId, ref: 'Entity' })
   companyId: Types.ObjectId; // Nearest ancestor entity with type 'company'
 
   @Prop({
@@ -213,7 +213,7 @@ UserSchema.index(
     // eslint-disable-next-line @typescript-eslint/ban-ts-comment
     // @ts-ignore - allow specifying custom partial filter properties
     partialFilterExpression: {
-      phoneNumber: { $type: "string" },
+      phoneNumber: { $type: 'string' },
       isActive: true,
     },
   },
@@ -234,17 +234,17 @@ UserSchema.index({ role: 1, tenantId: 1 });
 UserSchema.index({ whatsappConnectionStatus: 1 });
 
 // Virtual for full name
-UserSchema.virtual("fullName").get(function () {
+UserSchema.virtual('fullName').get(function () {
   return `${this.firstName} ${this.lastName}`;
 });
 
 // Auto-generate initials
-UserSchema.pre("save", function () {
-  if (this.isModified("firstName") || this.isModified("lastName")) {
+UserSchema.pre('save', function () {
+  if (this.isModified('firstName') || this.isModified('lastName')) {
     this.initials =
       `${this.firstName.charAt(0)}${this.lastName.charAt(0)}`.toUpperCase();
   }
 });
 
-UserSchema.set("toJSON", { virtuals: true });
-UserSchema.set("toObject", { virtuals: true });
+UserSchema.set('toJSON', { virtuals: true });
+UserSchema.set('toObject', { virtuals: true });

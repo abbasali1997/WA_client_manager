@@ -1,14 +1,22 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { forwardRef, Inject, Injectable, Logger } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
-import { SessionStatus, WhatsAppSession } from '@/schemas/whatsapp-session.schema';
+import {
+  SessionStatus,
+  WhatsAppSession,
+} from '@/schemas/whatsapp-session.schema';
 import { User, WhatsAppConnectionStatus } from '@/schemas/user.schema';
 import { Model, Types } from 'mongoose';
 import WAWebJS, { Client, WAState } from 'whatsapp-web.js';
-import * as QRCode from "qrcode";
+import * as QRCode from 'qrcode';
 import { SessionService } from './session.service';
 import { RemoteAuthService } from './remoteAuth.service';
-import { killProcessTree } from '../tools/process-functions.tool';
-import { Message, MessageDirection, MessageStatus, MessageType } from '../schemas/message.schema';
+import { killProcessTree } from '@/tools/process-functions.tool';
+import {
+  Message,
+  MessageDirection,
+  MessageStatus,
+  MessageType,
+} from '@/schemas/message.schema';
 import { EntitiesService } from './entities.service';
 import { QrGateway } from './qr.service';
 
@@ -24,6 +32,7 @@ export class ClientService {
     private userModel: Model<User>,
     @InjectModel(Message.name)
     private messageModel: Model<Message>,
+    @Inject(forwardRef(() => SessionService))
     private readonly sessionService: SessionService,
     private remoteAuthService: RemoteAuthService,
     private entityService: EntitiesService,
@@ -68,7 +77,6 @@ export class ClientService {
       ) {
         if (client) {
           try {
-            console.log(client);
             state = await client.getState();
             isActuallyConnected = state === WAState.CONNECTED;
             this.logger.debug(
@@ -106,7 +114,7 @@ export class ClientService {
 
       // Generate QR code as base64 image
       const qrCodeDataUrl = await QRCode.toDataURL(qrData);
-      const qrCodeBase64 = qrCodeDataUrl.split(",")[1]; // Remove data:image/png;base64, prefix
+      const qrCodeBase64 = qrCodeDataUrl.split(',')[1]; // Remove data:image/png;base64, prefix
 
       const expiresAt = new Date(Date.now() + 60000); // 1 minute expiry
       const session = await this.sessionModel.findOneAndUpdate(
@@ -166,7 +174,7 @@ export class ClientService {
       this.qrGateway.emitStatus(sessionId, {
         status: SessionStatus.FAILED,
         message:
-          error instanceof Error ? error.message : "QR generation failed",
+          error instanceof Error ? error.message : 'QR generation failed',
       });
     }
   }
@@ -181,14 +189,14 @@ export class ClientService {
 
       const existingSession = await this.sessionModel
         .findOne({ sessionId })
-        .select("userId")
+        .select('userId')
         .lean();
 
       const sessionUserId = (existingSession as any)?.userId;
       if (sessionUserId) {
         const user = await this.userModel
           .findById(sessionUserId)
-          .select("phoneNumber")
+          .select('phoneNumber')
           .lean();
 
         const expectedE164 = (user as any)?.phoneNumber || null;
@@ -239,7 +247,7 @@ export class ClientService {
         try {
           const user = await this.userModel
             .findById(session.userId)
-            .select("qrInvitationHistory")
+            .select('qrInvitationHistory')
             .lean();
           const history = (user as any)?.qrInvitationHistory;
           if (Array.isArray(history) && history.length > 0) {
@@ -270,7 +278,8 @@ export class ClientService {
       // Post-ready diagnostic: after RemoteAuth's 60s initial stability delay, the backup should be updated.
       // This lets us verify whether backups are actually being written (and if the uploadDate changes).
       try {
-        const authClientId = await this.remoteAuthService.ensureAuthClientId(sessionId);
+        const authClientId =
+          await this.remoteAuthService.ensureAuthClientId(sessionId);
         const sessionName = `RemoteAuth-${authClientId}`;
         setTimeout(() => {
           void this.remoteAuthService.logRemoteAuthGridFsInfo(sessionName);
@@ -299,7 +308,7 @@ export class ClientService {
       return;
     }
 
-    const normalizedReason = String(reason || "").toUpperCase();
+    const normalizedReason = String(reason || '').toUpperCase();
     const client = this.clients.get(sessionId);
 
     const session = await this.sessionModel.findOneAndUpdate(
@@ -312,8 +321,6 @@ export class ClientService {
       },
       { new: true },
     );
-
-
 
     // TODO: Configure Telemetry
     // const isBlocked =
@@ -345,8 +352,8 @@ export class ClientService {
 
     // On LOGOUT or similar, attempt to clean up session files so next init won't fail on locks
     if (
-      normalizedReason.includes("LOGOUT") ||
-      normalizedReason.includes("UNPAIRED")
+      normalizedReason.includes('LOGOUT') ||
+      normalizedReason.includes('UNPAIRED')
     ) {
       try {
         // Best-effort: force-kill browser process tree to release file locks (Windows EBUSY)
@@ -360,14 +367,16 @@ export class ClientService {
           // ignore
         }
         if (pid) {
-          killProcessTree(pid).catch(e => {
-            this.logger.error(e.message)
+          killProcessTree(pid).catch((e) => {
+            this.logger.error(e.message);
           });
         }
 
-        const cleaned = await this.sessionService.cleanupSessionFilesForSession(sessionId);
+        const cleaned =
+          await this.sessionService.cleanupSessionFilesForSession(sessionId);
         if (!cleaned) {
-          const rotated = await this.remoteAuthService.rotateAuthClientId(sessionId);
+          const rotated =
+            await this.remoteAuthService.rotateAuthClientId(sessionId);
           this.logger.warn(
             `[SERVICE] Session files still locked after LOGOUT; rotating RemoteAuth clientId: sessionId=${sessionId}, authClientId=${rotated}`,
           );
@@ -399,7 +408,7 @@ export class ClientService {
       if (!session) return;
 
       const isCallLog = this.isCallLogMessage(message);
-      const hasContent = message.body && message.body.trim() !== "";
+      const hasContent = message.body && message.body.trim() !== '';
       const hasMedia = message.hasMedia;
 
       if (!hasContent && !hasMedia && !isCallLog) {
@@ -421,7 +430,7 @@ export class ClientService {
       const duplicateByContent = await this.messageModel.findOne({
         from: message.from,
         to: message.to,
-        content: message.body || "",
+        content: message.body || '',
         sentAt: {
           $gte: new Date(messageTimestamp.getTime() - timeWindow),
           $lte: new Date(messageTimestamp.getTime() + timeWindow),
@@ -434,7 +443,7 @@ export class ClientService {
 
       // Get entity with path
       const entity = await this.entityService.findOne(
-        session.entityId.toString()
+        session.entityId.toString(),
       );
       if (!entity.entityIdPath || entity.entityIdPath.length === 0) {
         this.logger.warn(
@@ -447,7 +456,7 @@ export class ClientService {
       if (message.hasQuotedMsg) {
         try {
           // Get the quoted message
-          quotedMessage = await message.getQuotedMessage() as WAWebJS.Message;
+          quotedMessage = (await message.getQuotedMessage()) as WAWebJS.Message;
           this.logger.log(
             `Reply detected - Original message: ${quotedMessage.id._serialized} from ${quotedMessage.from}`,
           );
@@ -456,7 +465,7 @@ export class ClientService {
         }
       }
 
-      let mediaUrl ;
+      let mediaUrl;
       if (message.hasMedia) {
         mediaUrl = await this.handleMediaUpload(message);
       }
@@ -473,7 +482,7 @@ export class ClientService {
 
       // Get contact info for recipient (TO - session owner)
       const toPhoneNumber = this.getE164FromSession(sessionId);
-      let toContactInfo ;
+      let toContactInfo;
       try {
         // Get the session owner's contact from WhatsApp
         const client = this.clients.get(sessionId);
@@ -522,7 +531,7 @@ export class ClientService {
       const isExternalNumber = !registeredUser;
 
       this.logger.log(
-        `Message from ${cleanedPhoneNumber}: ${isExternalNumber ? "EXTERNAL" : "REGISTERED"} - ${fromContactInfo.name}`,
+        `Message from ${cleanedPhoneNumber}: ${isExternalNumber ? 'EXTERNAL' : 'REGISTERED'} - ${fromContactInfo.name}`,
       );
 
       const contact = await message.getContact();
@@ -558,7 +567,7 @@ export class ClientService {
         toAvatarUrl: toContactInfo.avatarUrl,
         type: this.getMessageType(message.type),
         direction: MessageDirection.INBOUND,
-        content: message.body || (isCallLog ? "Call log" : ""),
+        content: message.body || (isCallLog ? 'Call log' : ''),
         mediaUrl,
         status: MessageStatus.DELIVERED,
         sentAt: new Date(message.timestamp * 1000),
@@ -592,11 +601,11 @@ export class ClientService {
           isExternalSender: isExternalNumber,
           registeredUserInfo: registeredUser
             ? {
-              firstName: registeredUser.firstName,
-              lastName: registeredUser.lastName,
-              email: registeredUser.email,
-              role: registeredUser.role,
-            }
+                firstName: registeredUser.firstName,
+                lastName: registeredUser.lastName,
+                email: registeredUser.email,
+                role: registeredUser.role,
+              }
             : null,
         },
       };
@@ -627,7 +636,7 @@ export class ClientService {
       if (!session) return;
 
       const isCallLog = this.isCallLogMessage(message);
-      const hasContent = message.body && message.body.trim() !== "";
+      const hasContent = message.body && message.body.trim() !== '';
       const hasMedia = message.hasMedia;
 
       if (!hasContent && !hasMedia && !isCallLog) {
@@ -649,7 +658,7 @@ export class ClientService {
       const duplicateByContent = await this.messageModel.findOne({
         from: message.from,
         to: message.to,
-        content: message.body || "",
+        content: message.body || '',
         sentAt: {
           $gte: new Date(messageTimestamp.getTime() - timeWindow),
           $lte: new Date(messageTimestamp.getTime() + timeWindow),
@@ -661,7 +670,9 @@ export class ClientService {
       }
 
       // Get entity with path
-      const entity = await this.entityService.findOne(session.entityId.toString());
+      const entity = await this.entityService.findOne(
+        session.entityId.toString(),
+      );
       if (!entity.entityIdPath || entity.entityIdPath.length === 0) {
         this.logger.warn(
           `Failed to get entity path for entity: ${session.entityId}`,
@@ -679,8 +690,8 @@ export class ClientService {
       const fromPhoneNumber = this.getE164FromSession(sessionId);
       let toPhoneNumber = message.to;
       const isGroupDestination =
-        String(message?.to || "").includes("@g.us") ||
-        String(toContactInfo?.phone || "").includes("@g.us") ||
+        String(message?.to || '').includes('@g.us') ||
+        String(toContactInfo?.phone || '').includes('@g.us') ||
         !!toContactInfo?.isGroup;
 
       // Best-effort: resolve group name for outbound group messages
@@ -696,8 +707,8 @@ export class ClientService {
 
       let fromContactInfo;
       let toName = isGroupDestination
-        ? resolvedGroupName || String(message?.to || "")
-        : "Unknown";
+        ? resolvedGroupName || String(message?.to || '')
+        : 'Unknown';
       try {
         // Get the session owner's contact from WhatsApp
         const client = this.clients.get(sessionId);
@@ -783,7 +794,7 @@ export class ClientService {
         toAvatarUrl: fromContactInfo.avatarUrl,
         type: this.getMessageType(message.type),
         direction: MessageDirection.OUTBOUND,
-        content: message.body || (isCallLog ? "Call log" : ""),
+        content: message.body || (isCallLog ? 'Call log' : ''),
         mediaUrl,
         status: MessageStatus.SENT,
         sentAt: new Date(message.timestamp * 1000),
@@ -836,7 +847,9 @@ export class ClientService {
         call?.id?._serialized || call?.id || `${sessionId}-call-${Date.now()}`;
       const callIdStr = callId.toString();
 
-      const entity = await this.entityService.findOne(session.entityId.toString());
+      const entity = await this.entityService.findOne(
+        session.entityId.toString(),
+      );
       if (!entity.entityIdPath || entity.entityIdPath.length === 0) {
         this.logger.warn(
           `Failed to get entity path for entity: ${session.entityId}`,
@@ -845,15 +858,15 @@ export class ClientService {
 
       const sessionE164 = this.getE164FromSession(sessionId);
       const sessionJid = sessionE164
-        ? `${sessionE164.replace(/\+/g, "")}@c.us`
+        ? `${sessionE164.replace(/\+/g, '')}@c.us`
         : sessionId;
 
       const sessionDigits = sessionE164
-        ? sessionE164.replace(/[^\d]/g, "")
+        ? sessionE164.replace(/[^\d]/g, '')
         : null;
       const jidMatchesSession = (jid?: string) => {
         if (!jid || !sessionDigits) return false;
-        const digits = jid.replace(/[^\d]/g, "");
+        const digits = jid.replace(/[^\d]/g, '');
         return digits.endsWith(sessionDigits);
       };
 
@@ -884,13 +897,13 @@ export class ClientService {
         return null;
       };
 
-      const remoteJidOriginal = pickRemoteJid() || "";
+      const remoteJidOriginal = pickRemoteJid() || '';
       const normalizedRemoteJid =
         this.normalizeJid(remoteJidOriginal) || remoteJidOriginal;
       let resolvedRemoteJid = normalizedRemoteJid || remoteJidOriginal;
 
       // Resolve LID to actual phone number
-      const isLid = remoteJidOriginal.endsWith("@lid");
+      const isLid = remoteJidOriginal.endsWith('@lid');
       let resolvedE164FromLid: string | null = null;
       if (isLid) {
         try {
@@ -946,7 +959,7 @@ export class ClientService {
         ? new Date(call.timestamp * 1000)
         : new Date();
 
-      let remoteName = remotePhoneNumber || resolvedRemoteJid || "Unknown";
+      let remoteName = remotePhoneNumber || resolvedRemoteJid || 'Unknown';
       let remoteAvatarUrl;
       try {
         const client = this.clients.get(sessionId);
@@ -973,7 +986,7 @@ export class ClientService {
       }
 
       let sessionOwnerName =
-        session.phoneNumber || sessionE164 || sessionId || "Me";
+        session.phoneNumber || sessionE164 || sessionId || 'Me';
       try {
         const sessionUser = await this.userModel.findOne({
           phoneNumber: sessionE164,
@@ -995,29 +1008,29 @@ export class ClientService {
       const registeredRemote =
         registrationCheckNumber && session.tenantId
           ? await this.checkIfRegisteredUser(
-            registrationCheckNumber,
-            session.tenantId,
-          )
+              registrationCheckNumber,
+              session.tenantId,
+            )
           : null;
       const isExternalNumber = !registeredRemote;
 
       const translationKey =
         direction === MessageDirection.OUTBOUND
           ? call?.isVideo
-            ? "call.outgoing.video"
-            : "call.outgoing.voice"
+            ? 'call.outgoing.video'
+            : 'call.outgoing.voice'
           : call?.isVideo
-            ? "call.incoming.video"
-            : "call.incoming.voice";
+            ? 'call.incoming.video'
+            : 'call.incoming.voice';
 
       const content =
         direction === MessageDirection.OUTBOUND
           ? call?.isVideo
-            ? "Outgoing video call"
-            : "Outgoing voice call"
+            ? 'Outgoing video call'
+            : 'Outgoing voice call'
           : call?.isVideo
-            ? "Incoming video call"
-            : "Incoming voice call";
+            ? 'Incoming video call'
+            : 'Incoming voice call';
 
       const conversationId = normalizedRemoteJid || sessionJid;
 
@@ -1165,7 +1178,7 @@ export class ClientService {
   getClientBrowserPid(client: Client | undefined): number | undefined {
     try {
       const pid = (client as any)?.pupBrowser?.process?.()?.pid;
-      return typeof pid === "number" ? pid : undefined;
+      return typeof pid === 'number' ? pid : undefined;
     } catch {
       return undefined;
     }
@@ -1178,10 +1191,10 @@ export class ClientService {
   private normalizeJid(jid?: string): string | null {
     if (!jid) return null;
     const lower = jid.toLowerCase();
-    const isGroup = lower.endsWith("@g.us") || lower.includes("@broadcast");
+    const isGroup = lower.endsWith('@g.us') || lower.includes('@broadcast');
     if (isGroup) return jid;
 
-    const digitsOnly = jid.replace(/[^\d]/g, "");
+    const digitsOnly = jid.replace(/[^\d]/g, '');
     if (!digitsOnly) return jid;
 
     return `${digitsOnly}@c.us`;
@@ -1213,17 +1226,17 @@ export class ClientService {
     isGroup?: boolean;
   }> {
     try {
-      const fromJid = String(message?.from || "");
-      const toJid = String(message?.to || "");
-      const groupJid = fromJid.includes("@g.us")
+      const fromJid = String(message?.from || '');
+      const toJid = String(message?.to || '');
+      const groupJid = fromJid.includes('@g.us')
         ? fromJid
-        : toJid.includes("@g.us")
+        : toJid.includes('@g.us')
           ? toJid
           : null;
 
       // Try to get contact info from WhatsApp
       const contact = await message.getContact();
-      const name = contact.pushname || contact.name || contact.shortName || "";
+      const name = contact.pushname || contact.name || contact.shortName || '';
       // For group chats, prefer the group JID as the "phone" identifier
       const phone = groupJid || contact.number || fromJid;
 
@@ -1253,7 +1266,7 @@ export class ClientService {
       }
 
       return {
-        name: (isGroup ? (groupName || "").trim() : name.trim()) || "Unknown",
+        name: (isGroup ? (groupName || '').trim() : name.trim()) || 'Unknown',
         phone,
         avatarUrl: avatarUrl || undefined,
         username: isGroup ? undefined : name.trim() || undefined,
@@ -1266,8 +1279,8 @@ export class ClientService {
         error,
       );
       return {
-        name: "Unknown",
-        phone: String(message?.to || message?.from || ""),
+        name: 'Unknown',
+        phone: String(message?.to || message?.from || ''),
       };
     }
   }
@@ -1283,9 +1296,9 @@ export class ClientService {
           phoneNumber: phoneNumber,
           tenantId: tenantId,
           isActive: true,
-          registrationStatus: { $in: ["registered", "invited"] },
+          registrationStatus: { $in: ['registered', 'invited'] },
         })
-        .select("firstName lastName email phoneNumber role");
+        .select('firstName lastName email phoneNumber role');
 
       return user;
     } catch (error) {
@@ -1299,7 +1312,7 @@ export class ClientService {
 
   private getE164FromSession(sessionId: string): string {
     try {
-      const e164 = sessionId.replace("whatsapp-", "+");
+      const e164 = sessionId.replace('whatsapp-', '+');
       return this.cleanPhoneNumber(e164);
     } catch (error) {
       this.logger.error(`Failed to get E164 from session ${sessionId}:`, error);
@@ -1309,13 +1322,13 @@ export class ClientService {
 
   private cleanPhoneNumber(phoneNumber: string): string {
     // Remove any non-digit characters except +
-    let cleaned = phoneNumber.replace(/[^\d+]/g, "");
+    let cleaned = phoneNumber.replace(/[^\d+]/g, '');
 
     // If it doesn't start with +, assume it needs country code
-    if (!cleaned.startsWith("+")) {
+    if (!cleaned.startsWith('+')) {
       // This is a simplified approach - in production you might want to use a library like libphonenumber
       // For now, we'll just return the original number
-      cleaned = "+" + cleaned;
+      cleaned = '+' + cleaned;
     }
 
     return cleaned;
@@ -1327,11 +1340,11 @@ export class ClientService {
       if (!media) return null;
 
       const { data, mimetype } = media;
-      const extension = mimetype.split("/")[1];
+      const extension = mimetype.split('/')[1];
       const fileName = `${message.id._serialized}.${extension}`;
 
       // Convert base64 to buffer
-      const buffer = Buffer.from(data, "base64");
+      const buffer = Buffer.from(data, 'base64');
 
       // Upload to cloud storage using StorageService
       // TODO: Use Azure storage here
@@ -1339,7 +1352,7 @@ export class ClientService {
         buffer,
         fileName,
         mimetype,
-        "whatsapp-media",
+        'whatsapp-media',
       );
 
       this.logger.log(`Media uploaded to cloud storage: ${uploadResult.url}`);
@@ -1352,7 +1365,7 @@ export class ClientService {
   }
 
   private normalizePhoneDigits(value?: string | null): string {
-    return String(value || "").replace(/[^0-9]/g, "");
+    return String(value || '').replace(/[^0-9]/g, '');
   }
 
   private async failSessionWithPhoneMismatch(params: {
@@ -1369,7 +1382,7 @@ export class ClientService {
       { sessionId: params.sessionId },
       {
         status: SessionStatus.FAILED,
-        lastError: "PHONE_MISMATCH",
+        lastError: 'PHONE_MISMATCH',
         lastErrorAt: now,
         disconnectedAt: now,
         qrCode: null,
@@ -1411,7 +1424,7 @@ export class ClientService {
           client.logout(),
           new Promise((_, reject) =>
             setTimeout(
-              () => reject(new Error("WhatsApp logout timeout")),
+              () => reject(new Error('WhatsApp logout timeout')),
               logoutTimeoutMs,
             ),
           ),
@@ -1427,7 +1440,9 @@ export class ClientService {
     }
 
     // Preserve FAILED status while tearing down client resources
-    await this.sessionService.disconnectSession(params.sessionId, { preserveStatus: true });
+    await this.sessionService.disconnectSession(params.sessionId, {
+      preserveStatus: true,
+    });
 
     this.qrGateway.emitStatus(params.sessionId, {
       status: SessionStatus.FAILED,
@@ -1436,12 +1451,12 @@ export class ClientService {
   }
 
   private isCallLogMessage(message: any): boolean {
-    return message?.type === "call_log";
+    return message?.type === 'call_log';
   }
 
   private maskPhoneDigits(value?: string | null): string {
     const digits = this.normalizePhoneDigits(value);
-    if (!digits) return "";
+    if (!digits) return '';
     if (digits.length <= 4) return `****${digits}`;
     return `****${digits.slice(-4)}`;
   }
