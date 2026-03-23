@@ -1,0 +1,24 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "outDir": "./dist/worker",
+    "tsBuildInfoFile": "./dist/.tsbuildinfo-worker"
+  },
+  "include": [
+    "src/worker/**/*.ts",
+    "src/config/**/*.ts",
+    "src/schemas/**/*.ts",
+    "src/services/**/*.ts",
+    "src/tools/**/*.ts"
+  ],
+  "exclude": [
+    "src/main.ts",
+    "src/app.module.ts",
+    "src/controllers/**/*",
+    "src/dtos/**/*",
+    "test/**/*",
+    "src/**/*.d.ts",
+    "src/**/*.js",
+    "src/**/*.js.map"
+  ]
+}

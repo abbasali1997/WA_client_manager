@@ -1,0 +1,24 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "outDir": "./dist/api",
+    "tsBuildInfoFile": "./dist/.tsbuildinfo-api"
+  },
+  "include": [
+    "src/main.ts",
+    "src/app.module.ts",
+    "src/config/**/*.ts",
+    "src/controllers/**/*.ts",
+    "src/dtos/**/*.ts",
+    "src/schemas/**/*.ts",
+    "src/services/**/*.ts",
+    "src/tools/**/*.ts"
+  ],
+  "exclude": [
+    "src/worker/**/*",
+    "test/**/*",
+    "src/**/*.d.ts",
+    "src/**/*.js",
+    "src/**/*.js.map"
+  ]
+}

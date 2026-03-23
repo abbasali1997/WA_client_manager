@@ -19,4 +19,13 @@ export default registerAs('whatsapp', () => ({
   ),
   authPath: process.env.WWEBJS_AUTH_PATH || `${process.cwd()}/.wwebjs_auth`,
   chromePath: process.env.CHROME_PATH || '',
+  healthCheckIntervalMs:
+    parseInt(process.env.WHATSAPP_HEALTHCHECK_INTERVAL_MS || '300000', 10) ||
+    30000,
+  healthCheckFailureThreshold:
+    parseInt(process.env.WHATSAPP_HEALTHCHECK_FAILURE_THRESHOLD || '3', 10) ||
+    3,
+  healthAlertCooldownMs:
+    parseInt(process.env.WHATSAPP_HEALTH_ALERT_COOLDOWN_MS || '3600000') ||
+    '3600000',
 }));

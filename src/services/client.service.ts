@@ -39,6 +39,18 @@ export class ClientService {
     private qrGateway: QrGateway,
   ) {}
 
+  /**
+   * Returns sessionIds for WhatsApp clients currently active in this process.
+   * Useful for health-check selection when DB state is stale/lagging in multi-pod deployments.
+   */
+  listActiveClientSessionIds(): string[] {
+    return Array.from(this.clients.keys());
+  }
+
+  hasActiveClient(sessionId: string): boolean {
+    return this.clients.has(sessionId);
+  }
+
   async handleQRCode(
     sessionId: string,
     qrData: string,

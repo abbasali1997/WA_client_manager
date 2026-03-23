@@ -1,19 +1,27 @@
-import { forwardRef, Inject, Injectable, Logger } from '@nestjs/common';
+import {
+  forwardRef,
+  Inject,
+  Injectable,
+  Logger,
+  NotFoundException,
+} from '@nestjs/common';
 import { ClientService } from './client.service';
 import os from 'os';
 import { InjectModel } from '@nestjs/mongoose';
 import {
   SessionStatus,
   WhatsAppSession,
-} from '../schemas/whatsapp-session.schema';
+} from '@/schemas/whatsapp-session.schema';
 import { Model } from 'mongoose';
-import { User, WhatsAppConnectionStatus } from '../schemas/user.schema';
+import { User, WhatsAppConnectionStatus } from '@/schemas/user.schema';
 import { RemoteAuthService } from './remoteAuth.service';
 import fsSync from 'fs';
 import fs from 'fs/promises';
 import { killProcessTree } from '../tools/process-functions.tool';
 import { QrGateway } from './qr.service';
 import { ConfigService } from '@nestjs/config';
+import { WAState } from 'whatsapp-web.js';
+import { WhatsAppHealthService } from '@/services/whatsapp-health.service';
 
 @Injectable()
 export class SessionService {
@@ -41,6 +49,8 @@ export class SessionService {
     private userModel: Model<User>,
     private qrGateway: QrGateway,
     private configService: ConfigService,
+    @Inject(forwardRef(() => WhatsAppHealthService))
+    private heathService: WhatsAppHealthService,
   ) {}
 
   async disconnectSession(
@@ -196,6 +206,75 @@ export class SessionService {
     }
   }
 
+  /**
+   * Explicit "unlink" behavior: destroy client + remove persisted auth data so next init requires a new QR.
+   * This is intentionally separate from `disconnectSession` to avoid wiping sessions on shutdown/restart.
+   */
+  async removeSession(sessionId: string): Promise<void> {
+    const client = this.clientService.clients.get(sessionId);
+
+    // Best-effort: WhatsApp logout so the mobile app removes it from "Linked devices".
+    if (client) {
+      try {
+        const logoutTimeoutMs =
+          Number(process.env.WHATSAPP_LOGOUT_TIMEOUT_MS) || 15000;
+        await Promise.race([
+          client.logout(),
+          new Promise((_, reject) =>
+            setTimeout(
+              () => reject(new Error('WhatsApp logout timeout')),
+              logoutTimeoutMs,
+            ),
+          ),
+        ]);
+      } catch (error) {
+        this.logger.warn(
+          `[SERVICE] removeSession: logout failed for sessionId=${sessionId}: ${
+            error instanceof Error ? error.message : String(error)
+          }`,
+        );
+      }
+    }
+
+    // Disconnect client resources but DO NOT rely on disconnectSession to wipe auth.
+    await this.disconnectSession(sessionId, { cleanupSessionFiles: false });
+
+    // Remove persisted RemoteAuth backup(s) from MongoStore + local `.wwebjs_auth` folders.
+    try {
+      const store = this.remoteAuthService.ensureRemoteAuthStore();
+      const clientId =
+        await this.remoteAuthService.ensureAuthClientId(sessionId);
+      const candidates = Array.from(new Set([clientId, sessionId])).filter(
+        Boolean,
+      );
+      for (const id of candidates) {
+        try {
+          await store.delete({ session: `RemoteAuth-${id}` });
+        } catch {
+          // ignore
+        }
+      }
+    } catch {
+      // ignore
+    }
+
+    // Remove local session folders (RemoteAuth-*/session-*) and clear authClientId so future inits start clean.
+    await this.cleanupSessionFilesForSession(sessionId);
+    await this.sessionModel.updateOne(
+      { sessionId },
+      {
+        $unset: { authClientId: '' },
+        $set: {
+          status: SessionStatus.DISCONNECTED,
+          disconnectedAt: new Date(),
+          qrCode: null,
+          qrCodeGeneratedAt: null,
+          qrCodeExpiresAt: null,
+        },
+      },
+    );
+  }
+
   startSessionLockRefresh(sessionId: string): void {
     if (this.sessionLockRefreshTimers.has(sessionId)) {
       return;
@@ -301,6 +380,121 @@ export class SessionService {
       return false;
     }
     return true;
+  }
+
+  async getSessionStatus(sessionId: string): Promise<any> {
+    const session = await this.sessionModel.findOne({ sessionId });
+    if (!session) {
+      throw new NotFoundException('Session not found');
+    }
+
+    // Get health check status
+    let healthStatus = this.heathService.healthChecks.get(sessionId);
+    if (!healthStatus) {
+      healthStatus = {
+        lastCheck: new Date(),
+        lastStatus: 'success',
+        consecutiveFailures: 0,
+        successRate: 100,
+        recentChecks: 0,
+      };
+      this.heathService.healthChecks.set(sessionId, healthStatus);
+    }
+
+    // Check current status
+    const client = this.clientService.clients.get(sessionId);
+    if (client) {
+      const failureThreshold =
+        Number(
+          this.configService.get<string>(
+            'whatsapp.healthCheckFailureThreshold',
+            process.env.WHATSAPP_HEALTHCHECK_FAILURE_THRESHOLD || '3',
+          ),
+        ) || 3;
+      const activityGraceMs =
+        Number(
+          this.configService.get<string>(
+            'whatsapp.healthActivityGraceMs',
+            process.env.WHATSAPP_HEALTH_ACTIVITY_GRACE_MS || '120000',
+          ),
+        ) || 120000; // default: 2 minutes
+      const lastActivityAtMs = session.lastActivityAt
+        ? new Date(session.lastActivityAt as any).getTime()
+        : 0;
+      const isRecentlyActive =
+        lastActivityAtMs > 0 &&
+        Date.now() - lastActivityAtMs <= activityGraceMs;
+      try {
+        const state = await client.getState();
+        // whatsapp-web.js states can be transient (e.g., OPENING) even while messages still flow.
+        // Treat only persistent failures as "failed"; treat transient states as "warning".
+        const normalizedState = String(state || '').toUpperCase();
+        const transientProblemStates = new Set([
+          'DISCONNECTED',
+          'CONFLICT',
+          'PAIRING',
+        ]);
+        const hardFailStates = new Set(['UNLAUNCHED', 'TIMEOUT', 'UNPAIRED']);
+
+        if (normalizedState === WAState.CONNECTED) {
+          healthStatus.lastStatus = 'success';
+          healthStatus.consecutiveFailures = 0;
+        } else if (isRecentlyActive) {
+          // If messages are still flowing recently, avoid false "unstable" caused by transient states.
+          healthStatus.lastStatus = 'success';
+          healthStatus.consecutiveFailures = 0;
+        } else if (hardFailStates.has(normalizedState)) {
+          // Hard failures should count towards the threshold.
+          healthStatus.consecutiveFailures++;
+          healthStatus.lastStatus =
+            healthStatus.consecutiveFailures >= failureThreshold
+              ? 'failed'
+              : 'warning';
+        } else if (transientProblemStates.has(normalizedState)) {
+          // Transient states can happen without impacting message flow; do not increment failures.
+          healthStatus.lastStatus = 'warning';
+        } else {
+          // OPENING / RESUMING / etc
+          healthStatus.lastStatus = 'warning';
+        }
+        healthStatus.lastCheck = new Date();
+        healthStatus.recentChecks++;
+        healthStatus.successRate =
+          ((healthStatus.recentChecks - healthStatus.consecutiveFailures) /
+            healthStatus.recentChecks) *
+          100;
+        this.heathService.healthChecks.set(sessionId, healthStatus);
+      } catch (error) {
+        this.logger.error(`Failed to get client state: ${error.message}`);
+        if (isRecentlyActive) {
+          // If the client is still active, don't mark it unstable just because getState failed.
+          healthStatus.lastStatus = 'warning';
+        } else {
+          healthStatus.consecutiveFailures++;
+          healthStatus.lastStatus =
+            healthStatus.consecutiveFailures >= failureThreshold
+              ? 'failed'
+              : 'warning';
+        }
+        healthStatus.lastCheck = new Date();
+        healthStatus.recentChecks++;
+        healthStatus.successRate =
+          ((healthStatus.recentChecks - healthStatus.consecutiveFailures) /
+            healthStatus.recentChecks) *
+          100;
+        this.heathService.healthChecks.set(sessionId, healthStatus);
+      }
+    }
+
+    return {
+      ...session.toObject(),
+      healthStatus: {
+        ...healthStatus,
+        // IMPORTANT: this is persisted and updated only by the periodic scheduler.
+        // Manual/dedicated checks may run, but must not change this value.
+        nextCheck: (session as any).nextHealthCheckAt,
+      },
+    };
   }
 
   private async refreshSessionLock(sessionId: string): Promise<void> {

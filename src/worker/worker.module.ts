@@ -1,24 +1,23 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
-import configuration from './config/configuration';
 import { MongooseModule } from '@nestjs/mongoose';
-import { WhatsappService } from './services/whatsapp.service';
-import { ClientService } from './services/client.service';
-import { EntitiesService } from './services/entities.service';
-import { QrGateway } from './services/qr.service';
-import { RemoteAuthService } from './services/remoteAuth.service';
-import { SessionService } from './services/session.service';
-import { Entity, EntitySchema } from './schemas/entity.schema';
-import { User, UserSchema } from './schemas/user.schema';
+import configuration from '../config/configuration';
+import { ScheduleModule } from '@nestjs/schedule';
+import { Scheduler } from './scheduler/scheduler';
+import { EmailService } from '@/services/email.service';
+import { Entity, EntitySchema } from '@/schemas/entity.schema';
+import { User, UserSchema } from '@/schemas/user.schema';
 import {
   WhatsAppSession,
   WhatsAppSessionSchema,
-} from './schemas/whatsapp-session.schema';
-import { EntityType, EntityTypeSchema } from './schemas/entity-type.schema';
-import { WhatsappController } from './controllers/whatsapp.controller';
+} from '@/schemas/whatsapp-session.schema';
+import { EntityType, EntityTypeSchema } from '@/schemas/entity-type.schema';
 import { Message, MessageSchema } from '@/schemas/message.schema';
-import { WhatsAppHealthService } from './services/whatsapp-health.service';
-import { EmailService } from '@/services/email.service';
+import { WhatsappService } from '@/services/whatsapp.service';
+import { ClientService } from '@/services/client.service';
+import { SessionService } from '@/services/session.service';
+import { WhatsappScheduler } from '@/worker/scheduler/whatsapp/whatsapp.scheduler';
+import { WhatsAppHealthService } from '@/services/whatsapp-health.service';
 
 @Module({
   imports: [
@@ -28,6 +27,9 @@ import { EmailService } from '@/services/email.service';
       envFilePath: ['.env'],
     }),
 
+    // Scheduling
+    ScheduleModule.forRoot(),
+
     // Database
     MongooseModule.forRootAsync({
       imports: [ConfigModule],
@@ -36,12 +38,11 @@ import { EmailService } from '@/services/email.service';
         // They have no effect and should be omitted to avoid deprecation warnings.
         return {
           uri: configService.get<string>('database.mongodbUri'),
-          maxPoolSize: configService.get<number>('database.maxPoolSize', 50),
-          minPoolSize: configService.get<number>('database.minPoolSize', 10),
         };
       },
       inject: [ConfigService],
     }),
+
     MongooseModule.forFeature([
       { name: Entity.name, schema: EntitySchema },
       { name: User.name, schema: UserSchema },
@@ -51,15 +52,13 @@ import { EmailService } from '@/services/email.service';
     ]),
   ],
   providers: [
+    WhatsappScheduler,
+    Scheduler,
+    EmailService,
     WhatsappService,
     ClientService,
-    EntitiesService,
-    QrGateway,
-    RemoteAuthService,
     SessionService,
     WhatsAppHealthService,
-    EmailService,
   ],
-  controllers: [WhatsappController],
 })
-export class AppModule {}
+export class WorkerModule {}
