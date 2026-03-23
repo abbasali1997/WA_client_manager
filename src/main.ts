@@ -33,5 +33,6 @@ async function bootstrap() {
 }
 
 void bootstrap().then(() => {
-  console.log(`🤖 Whatsapp Client Manager Running On Port ${PORT}`);
+  const logger = new Logger('Bootstrap');
+  logger.log(`🤖 Whatsapp Client Manager Running On Port ${PORT}`);
 });
