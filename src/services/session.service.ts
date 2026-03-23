@@ -124,7 +124,7 @@ export class SessionService {
                 qrCodeGeneratedAt: null,
                 qrCodeExpiresAt: null,
               },
-              { new: true },
+              { returnDocument: 'after' },
             )
             .select('userId')
             .lean();
@@ -159,7 +159,7 @@ export class SessionService {
                 lastError: error.message,
                 lastErrorAt: new Date(),
               },
-              { new: true },
+              { returnDocument: 'after' },
             )
             .select('userId')
             .lean();
@@ -291,7 +291,7 @@ export class SessionService {
           connectionOwnerHeartbeatAt: now,
         },
       },
-      { new: true },
+      { returnDocument: 'after' },
     );
 
     if (!updated) {

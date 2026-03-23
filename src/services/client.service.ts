@@ -125,7 +125,7 @@ export class ClientService {
           qrCodeGeneratedAt: new Date(),
           qrCodeExpiresAt: expiresAt,
         },
-        { new: true },
+        { returnDocument: 'after' },
       );
 
       if (!session) {
@@ -228,7 +228,7 @@ export class ClientService {
           lastActivityAt: new Date(),
           qrCode: null, // Clear QR code
         },
-        { new: true },
+        { returnDocument: 'after' },
       );
 
       if (session && session.userId) {
@@ -319,7 +319,7 @@ export class ClientService {
         lastError: reason,
         lastErrorAt: new Date(),
       },
-      { new: true },
+      { returnDocument: 'after' },
     );
 
     // TODO: Configure Telemetry
@@ -1390,7 +1390,7 @@ export class ClientService {
         qrCodeGeneratedAt: null,
         qrCodeExpiresAt: null,
       },
-      { new: false },
+      { returnDocument: 'after' },
     );
 
     if (params.userId) {
