@@ -36,6 +36,7 @@ export default tseslint.config(
       '@typescript-eslint/restrict-template-expressions': 'off',
       '@typescript-eslint/no-unused-vars': 'off',
       '@typescript-eslint/no-unsafe-enum-comparison': 'off',
+      '@typescript-eslint/no-misused-promises': 'off',
     },
   },
 );

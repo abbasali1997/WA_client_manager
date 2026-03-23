@@ -10,7 +10,7 @@ import {
   Headers,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { WhatsappService } from '../services/whatsapp.service';
+import { WhatsappService } from '@/services/whatsapp.service';
 import { InitClientDto } from '../dtos/init-client.dto';
 
 @Controller('clients')
@@ -24,7 +24,7 @@ export class WhatsappController {
 
   @Post('init')
   @HttpCode(HttpStatus.ACCEPTED)
-  async initClient(
+  initClient(
     @Body() dto: InitClientDto,
     @Headers('x-internal-api-key') apiKey?: string,
   ) {

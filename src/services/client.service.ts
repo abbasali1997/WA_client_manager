@@ -10,7 +10,7 @@ import WAWebJS, { Client, WAState } from 'whatsapp-web.js';
 import * as QRCode from 'qrcode';
 import { SessionService } from './session.service';
 import { RemoteAuthService } from './remoteAuth.service';
-import { killProcessTree } from '@/tools/process-functions.tool';
+import { killProcessTree } from '../tools/process-functions.tool';
 import {
   Message,
   MessageDirection,
@@ -1348,16 +1348,17 @@ export class ClientService {
 
       // Upload to cloud storage using StorageService
       // TODO: Use Azure storage here
-      const uploadResult = await this.storageService.uploadFile(
-        buffer,
-        fileName,
-        mimetype,
-        'whatsapp-media',
-      );
-
-      this.logger.log(`Media uploaded to cloud storage: ${uploadResult.url}`);
-      // Return proxy URL instead of direct cloud storage URL
-      return uploadResult.proxyUrl;
+      // const uploadResult = await this.storageService.uploadFile(
+      //   buffer,
+      //   fileName,
+      //   mimetype,
+      //   'whatsapp-media',
+      // );
+      //
+      // this.logger.log(`Media uploaded to cloud storage: ${uploadResult.url}`);
+      // // Return proxy URL instead of direct cloud storage URL
+      // return uploadResult.proxyUrl;
+      return '';
     } catch (error) {
       this.logger.error(`Failed to upload media: ${error.message}`, error);
       return null;

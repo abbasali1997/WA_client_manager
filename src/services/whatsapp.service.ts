@@ -5,11 +5,6 @@ import {
   OnModuleInit,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { QueueMessage, QueueService } from '@/common/messaging/queue.service';
-import {
-  WHATSAPP_QUEUE_NAME,
-  WhatsAppQueueEvent,
-} from '@/modules/whatsapp-queue/whatsapp-queue.service';
 import * as os from 'os';
 import fsSync from 'fs';
 import { Client, RemoteAuth } from 'whatsapp-web.js';
@@ -48,205 +43,263 @@ export class WhatsappService implements OnModuleInit, OnModuleDestroy {
     private clientService: ClientService,
   ) {}
 
-  /**
-   * Check if running on localhost
-   * @returns true if running on localhost, false otherwise
-   */
-  private isLocalhost(): boolean {
-    const nodeEnv = this.configService.get<string>(
-      'app.nodeEnv',
-      'development',
-    );
-    const baseUrl = this.configService.get<string>(
-      'app.baseUrl',
-      'http://localhost:3000',
-    );
-    return (
-      nodeEnv === 'development' ||
-      baseUrl.includes('localhost') ||
-      baseUrl.includes('127.0.0.1')
-    );
-  }
-
   async onModuleInit() {
-    // Skip starting receiver on localhost (WhatsApp sessions are initialized directly, not queued)
-    if (this.isLocalhost()) {
-      this.logger.log(
-        `[LOCALHOST] WhatsApp queue processor skipped - sessions are initialized directly, not queued`,
-      );
-      return;
-    }
-
-    this.logger.log(
-      `[PROCESSOR] Initializing WhatsApp queue processor for queue: ${WHATSAPP_QUEUE_NAME}`,
-    );
-    try {
-      // Start receiver for WhatsApp events
-      this.logger.debug(
-        `[PROCESSOR] Starting receiver with options: maxConcurrentCalls=2, autoCompleteMessages=true`,
-      );
-      await this.queueService.startReceiver(
-        WHATSAPP_QUEUE_NAME,
-        async (message, payload: QueueMessage<{ sessionId: string }>) => {
-          const messageId = message.messageId || 'unknown';
-          const correlationId =
-            message.correlationId || payload.correlationId || 'unknown';
-          const receivedAt = new Date().toISOString();
-          const startTime = Date.now();
-
-          this.logger.debug(
-            `[PROCESSOR] Message received: messageId=${messageId}, correlationId=${correlationId}, receivedAt=${receivedAt}, queue=${WHATSAPP_QUEUE_NAME}`,
-          );
-          this.logger.debug(
-            `[PROCESSOR] Message payload: eventType=${payload.eventType}, timestamp=${payload.timestamp}, userId=${payload.userId}, tenantId=${payload.tenantId}`,
-          );
-          this.logger.debug(
-            `[PROCESSOR] Message application properties: ${JSON.stringify(message.applicationProperties || {})}`,
-          );
-
-          try {
-            const { eventType, data } = payload;
-            this.logger.debug(
-              `[PROCESSOR] Parsed payload: eventType=${eventType}, data=${JSON.stringify(data)}`,
-            );
-
-            const sessionId = data?.sessionId;
-            if (!sessionId) {
-              this.logger.warn(
-                `[PROCESSOR] Received WhatsApp queue event without sessionId: messageId=${messageId}, correlationId=${correlationId}, payload=${JSON.stringify(payload)}`,
-              );
-              return;
-            }
-
-            this.logger.debug(
-              `[PROCESSOR] Processing event: eventType=${eventType}, sessionId=${sessionId}, messageId=${messageId}, correlationId=${correlationId}`,
-            );
-
-            switch (eventType) {
-              case WhatsAppQueueEvent.SESSION_INIT: {
-                this.logger.log(
-                  `[PROCESSOR] Processing SESSION_INIT: sessionId=${sessionId}, messageId=${messageId}, correlationId=${correlationId}`,
-                );
-                const initStartTime = Date.now();
-                try {
-                  await this.initializeClient(sessionId);
-                  const initDuration = Date.now() - initStartTime;
-                  this.logger.log(
-                    `[PROCESSOR] Successfully processed SESSION_INIT: sessionId=${sessionId}, messageId=${messageId}, correlationId=${correlationId}, duration=${initDuration}ms`,
-                  );
-                } catch (initError) {
-                  const initDuration = Date.now() - initStartTime;
-                  this.logger.error(
-                    `[PROCESSOR] Failed to process SESSION_INIT: sessionId=${sessionId}, messageId=${messageId}, correlationId=${correlationId}, duration=${initDuration}ms, error=${initError instanceof Error ? initError.message : String(initError)}`,
-                    initError instanceof Error ? initError.stack : undefined,
-                  );
-                  throw initError;
-                }
-                break;
-              }
-              case WhatsAppQueueEvent.SESSION_RECONNECT: {
-                this.logger.log(
-                  `[PROCESSOR] Processing SESSION_RECONNECT: sessionId=${sessionId}, messageId=${messageId}, correlationId=${correlationId}`,
-                );
-                const reconnectStartTime = Date.now();
-                try {
-                  await this.initializeClient(sessionId);
-                  const reconnectDuration = Date.now() - reconnectStartTime;
-                  this.logger.log(
-                    `[PROCESSOR] Successfully processed SESSION_RECONNECT: sessionId=${sessionId}, messageId=${messageId}, correlationId=${correlationId}, duration=${reconnectDuration}ms`,
-                  );
-                } catch (reconnectError) {
-                  const reconnectDuration = Date.now() - reconnectStartTime;
-                  this.logger.error(
-                    `[PROCESSOR] Failed to process SESSION_RECONNECT: sessionId=${sessionId}, messageId=${messageId}, correlationId=${correlationId}, duration=${reconnectDuration}ms, error=${reconnectError instanceof Error ? reconnectError.message : String(reconnectError)}`,
-                    reconnectError instanceof Error
-                      ? reconnectError.stack
-                      : undefined,
-                  );
-                  throw reconnectError;
-                }
-                break;
-              }
-              case WhatsAppQueueEvent.SESSION_DISCONNECT: {
-                this.logger.log(
-                  `[PROCESSOR] Processing SESSION_DISCONNECT: sessionId=${sessionId}, messageId=${messageId}, correlationId=${correlationId}`,
-                );
-                const disconnectStartTime = Date.now();
-                try {
-                  await this.sessionService.disconnectSession(sessionId);
-                  const disconnectDuration = Date.now() - disconnectStartTime;
-                  this.logger.log(
-                    `[PROCESSOR] Successfully processed SESSION_DISCONNECT: sessionId=${sessionId}, messageId=${messageId}, correlationId=${correlationId}, duration=${disconnectDuration}ms`,
-                  );
-                } catch (disconnectError) {
-                  const disconnectDuration = Date.now() - disconnectStartTime;
-                  this.logger.error(
-                    `[PROCESSOR] Failed to process SESSION_DISCONNECT: sessionId=${sessionId}, messageId=${messageId}, correlationId=${correlationId}, duration=${disconnectDuration}ms, error=${disconnectError instanceof Error ? disconnectError.message : String(disconnectError)}`,
-                    disconnectError instanceof Error
-                      ? disconnectError.stack
-                      : undefined,
-                  );
-                  throw disconnectError;
-                }
-                break;
-              }
-              default:
-                this.logger.warn(
-                  `[PROCESSOR] Unknown WhatsApp queue event: eventType=${eventType}, messageId=${messageId}, correlationId=${correlationId}, sessionId=${sessionId}`,
-                );
-            }
-
-            const totalDuration = Date.now() - startTime;
-            this.logger.debug(
-              `[PROCESSOR] Message processing completed: messageId=${messageId}, correlationId=${correlationId}, sessionId=${sessionId}, eventType=${eventType}, totalDuration=${totalDuration}ms`,
-            );
-          } catch (error) {
-            const totalDuration = Date.now() - startTime;
-            this.logger.error(
-              `[PROCESSOR] Failed to process WhatsApp queue message: messageId=${messageId}, correlationId=${correlationId}, sessionId=${payload.data?.sessionId || 'unknown'}, eventType=${payload.eventType}, totalDuration=${totalDuration}ms, error=${error instanceof Error ? error.message : String(error)}`,
-              error instanceof Error ? error.stack : undefined,
-            );
-            throw error;
-          }
-        },
-        {
-          maxConcurrentCalls: 2,
-          autoCompleteMessages: true,
-        },
-      );
-      this.logger.log(
-        `[PROCESSOR] Successfully started receiver for queue: ${WHATSAPP_QUEUE_NAME}`,
-      );
-    } catch (error) {
-      this.logger.error(
-        `[PROCESSOR] Failed to start receiver for queue ${WHATSAPP_QUEUE_NAME}: error=${error instanceof Error ? error.message : String(error)}`,
-        error instanceof Error ? error.stack : undefined,
-      );
-      throw error;
-    }
+    this.logger.log('WhatsApp Service initialized');
+    // Reconnect active sessions on startup
+    await this.reconnectActiveSessions();
   }
 
   async onModuleDestroy() {
-    // Skip stopping receiver on localhost (receiver was never started)
-    if (this.isLocalhost()) {
-      return;
-    }
+    this.logger.log('Destroying all WhatsApp clients');
 
-    this.logger.log(
-      `[PROCESSOR] Stopping receiver for queue: ${WHATSAPP_QUEUE_NAME}`,
-    );
-    try {
-      await this.queueService.stopReceiver(WHATSAPP_QUEUE_NAME);
-      this.logger.log(
-        `[PROCESSOR] Successfully stopped receiver for queue: ${WHATSAPP_QUEUE_NAME}`,
-      );
-    } catch (error) {
-      this.logger.error(
-        `[PROCESSOR] Failed to stop receiver for queue ${WHATSAPP_QUEUE_NAME}: error=${error instanceof Error ? error.message : String(error)}`,
-        error instanceof Error ? error.stack : undefined,
-      );
+    for (const [sessionId] of this.clientService.clients.entries()) {
+      await this.sessionService.disconnectSession(sessionId);
     }
   }
+
+  async reconnectActiveSessions(): Promise<void> {
+    this.logger.debug(`[SERVICE] Starting reconnect of active sessions`);
+
+    const activeSessions = await this.sessionModel.find({
+      $or: [
+        { status: { $in: [SessionStatus.READY, SessionStatus.AUTHENTICATED] } },
+        { status: SessionStatus.CONNECTING },
+        {
+          status: SessionStatus.DISCONNECTED,
+          $or: [
+            { connectedAt: { $exists: true, $ne: null } },
+            { whatsappId: { $exists: true, $ne: null } },
+            { phoneNumber: { $exists: true, $ne: null } },
+          ],
+        },
+      ],
+    });
+
+    this.logger.debug(
+      `[SERVICE] Found ${activeSessions.length} active sessions to reconnect`,
+    );
+
+    for (const session of activeSessions) {
+      try {
+        this.logger.log(
+          `[SERVICE] Reconnecting session: sessionId=${session.sessionId}, status=${String(session.status)}, userId=${String(session.userId)}, tenantId=${String(session.tenantId)}`,
+        );
+
+        await this.initializeClient(session.sessionId);
+
+        this.logger.debug(
+          `[SERVICE] Successfully triggered reconnection: sessionId=${session.sessionId}`,
+        );
+      } catch (error) {
+        this.logger.error(
+          `[SERVICE] Failed to reconnect session: sessionId=${session.sessionId}, error=${error instanceof Error ? error.message : String(error)}`,
+          error instanceof Error ? error.stack : undefined,
+        );
+      }
+    }
+
+    this.logger.debug(`[SERVICE] Completed reconnect of active sessions`);
+  }
+
+  // /**
+  //  * Check if running on localhost
+  //  * @returns true if running on localhost, false otherwise
+  //  */
+  // private isLocalhost(): boolean {
+  //   const nodeEnv = this.configService.get<string>(
+  //     'app.nodeEnv',
+  //     'development',
+  //   );
+  //   const baseUrl = this.configService.get<string>(
+  //     'app.baseUrl',
+  //     'http://localhost:3000',
+  //   );
+  //   return (
+  //     nodeEnv === 'development' ||
+  //     baseUrl.includes('localhost') ||
+  //     baseUrl.includes('127.0.0.1')
+  //   );
+  // }
+
+  // async onModuleInit() {
+  //   // Skip starting receiver on localhost (WhatsApp sessions are initialized directly, not queued)
+  //   if (this.isLocalhost()) {
+  //     this.logger.log(
+  //       `[LOCALHOST] WhatsApp queue processor skipped - sessions are initialized directly, not queued`,
+  //     );
+  //     return;
+  //   }
+  //
+  //   this.logger.log(
+  //     `[PROCESSOR] Initializing WhatsApp queue processor for queue: ${WHATSAPP_QUEUE_NAME}`,
+  //   );
+  //   try {
+  //     // Start receiver for WhatsApp events
+  //     this.logger.debug(
+  //       `[PROCESSOR] Starting receiver with options: maxConcurrentCalls=2, autoCompleteMessages=true`,
+  //     );
+  //     await this.queueService.startReceiver(
+  //       WHATSAPP_QUEUE_NAME,
+  //       async (message, payload: QueueMessage<{ sessionId: string }>) => {
+  //         const messageId = message.messageId || 'unknown';
+  //         const correlationId =
+  //           message.correlationId || payload.correlationId || 'unknown';
+  //         const receivedAt = new Date().toISOString();
+  //         const startTime = Date.now();
+  //
+  //         this.logger.debug(
+  //           `[PROCESSOR] Message received: messageId=${messageId}, correlationId=${correlationId}, receivedAt=${receivedAt}, queue=${WHATSAPP_QUEUE_NAME}`,
+  //         );
+  //         this.logger.debug(
+  //           `[PROCESSOR] Message payload: eventType=${payload.eventType}, timestamp=${payload.timestamp}, userId=${payload.userId}, tenantId=${payload.tenantId}`,
+  //         );
+  //         this.logger.debug(
+  //           `[PROCESSOR] Message application properties: ${JSON.stringify(message.applicationProperties || {})}`,
+  //         );
+  //
+  //         try {
+  //           const { eventType, data } = payload;
+  //           this.logger.debug(
+  //             `[PROCESSOR] Parsed payload: eventType=${eventType}, data=${JSON.stringify(data)}`,
+  //           );
+  //
+  //           const sessionId = data?.sessionId;
+  //           if (!sessionId) {
+  //             this.logger.warn(
+  //               `[PROCESSOR] Received WhatsApp queue event without sessionId: messageId=${messageId}, correlationId=${correlationId}, payload=${JSON.stringify(payload)}`,
+  //             );
+  //             return;
+  //           }
+  //
+  //           this.logger.debug(
+  //             `[PROCESSOR] Processing event: eventType=${eventType}, sessionId=${sessionId}, messageId=${messageId}, correlationId=${correlationId}`,
+  //           );
+  //
+  //           switch (eventType) {
+  //             case WhatsAppQueueEvent.SESSION_INIT: {
+  //               this.logger.log(
+  //                 `[PROCESSOR] Processing SESSION_INIT: sessionId=${sessionId}, messageId=${messageId}, correlationId=${correlationId}`,
+  //               );
+  //               const initStartTime = Date.now();
+  //               try {
+  //                 await this.initializeClient(sessionId);
+  //                 const initDuration = Date.now() - initStartTime;
+  //                 this.logger.log(
+  //                   `[PROCESSOR] Successfully processed SESSION_INIT: sessionId=${sessionId}, messageId=${messageId}, correlationId=${correlationId}, duration=${initDuration}ms`,
+  //                 );
+  //               } catch (initError) {
+  //                 const initDuration = Date.now() - initStartTime;
+  //                 this.logger.error(
+  //                   `[PROCESSOR] Failed to process SESSION_INIT: sessionId=${sessionId}, messageId=${messageId}, correlationId=${correlationId}, duration=${initDuration}ms, error=${initError instanceof Error ? initError.message : String(initError)}`,
+  //                   initError instanceof Error ? initError.stack : undefined,
+  //                 );
+  //                 throw initError;
+  //               }
+  //               break;
+  //             }
+  //             case WhatsAppQueueEvent.SESSION_RECONNECT: {
+  //               this.logger.log(
+  //                 `[PROCESSOR] Processing SESSION_RECONNECT: sessionId=${sessionId}, messageId=${messageId}, correlationId=${correlationId}`,
+  //               );
+  //               const reconnectStartTime = Date.now();
+  //               try {
+  //                 await this.initializeClient(sessionId);
+  //                 const reconnectDuration = Date.now() - reconnectStartTime;
+  //                 this.logger.log(
+  //                   `[PROCESSOR] Successfully processed SESSION_RECONNECT: sessionId=${sessionId}, messageId=${messageId}, correlationId=${correlationId}, duration=${reconnectDuration}ms`,
+  //                 );
+  //               } catch (reconnectError) {
+  //                 const reconnectDuration = Date.now() - reconnectStartTime;
+  //                 this.logger.error(
+  //                   `[PROCESSOR] Failed to process SESSION_RECONNECT: sessionId=${sessionId}, messageId=${messageId}, correlationId=${correlationId}, duration=${reconnectDuration}ms, error=${reconnectError instanceof Error ? reconnectError.message : String(reconnectError)}`,
+  //                   reconnectError instanceof Error
+  //                     ? reconnectError.stack
+  //                     : undefined,
+  //                 );
+  //                 throw reconnectError;
+  //               }
+  //               break;
+  //             }
+  //             case WhatsAppQueueEvent.SESSION_DISCONNECT: {
+  //               this.logger.log(
+  //                 `[PROCESSOR] Processing SESSION_DISCONNECT: sessionId=${sessionId}, messageId=${messageId}, correlationId=${correlationId}`,
+  //               );
+  //               const disconnectStartTime = Date.now();
+  //               try {
+  //                 await this.sessionService.disconnectSession(sessionId);
+  //                 const disconnectDuration = Date.now() - disconnectStartTime;
+  //                 this.logger.log(
+  //                   `[PROCESSOR] Successfully processed SESSION_DISCONNECT: sessionId=${sessionId}, messageId=${messageId}, correlationId=${correlationId}, duration=${disconnectDuration}ms`,
+  //                 );
+  //               } catch (disconnectError) {
+  //                 const disconnectDuration = Date.now() - disconnectStartTime;
+  //                 this.logger.error(
+  //                   `[PROCESSOR] Failed to process SESSION_DISCONNECT: sessionId=${sessionId}, messageId=${messageId}, correlationId=${correlationId}, duration=${disconnectDuration}ms, error=${disconnectError instanceof Error ? disconnectError.message : String(disconnectError)}`,
+  //                   disconnectError instanceof Error
+  //                     ? disconnectError.stack
+  //                     : undefined,
+  //                 );
+  //                 throw disconnectError;
+  //               }
+  //               break;
+  //             }
+  //             default:
+  //               this.logger.warn(
+  //                 `[PROCESSOR] Unknown WhatsApp queue event: eventType=${eventType}, messageId=${messageId}, correlationId=${correlationId}, sessionId=${sessionId}`,
+  //               );
+  //           }
+  //
+  //           const totalDuration = Date.now() - startTime;
+  //           this.logger.debug(
+  //             `[PROCESSOR] Message processing completed: messageId=${messageId}, correlationId=${correlationId}, sessionId=${sessionId}, eventType=${eventType}, totalDuration=${totalDuration}ms`,
+  //           );
+  //         } catch (error) {
+  //           const totalDuration = Date.now() - startTime;
+  //           this.logger.error(
+  //             `[PROCESSOR] Failed to process WhatsApp queue message: messageId=${messageId}, correlationId=${correlationId}, sessionId=${payload.data?.sessionId || 'unknown'}, eventType=${payload.eventType}, totalDuration=${totalDuration}ms, error=${error instanceof Error ? error.message : String(error)}`,
+  //             error instanceof Error ? error.stack : undefined,
+  //           );
+  //           throw error;
+  //         }
+  //       },
+  //       {
+  //         maxConcurrentCalls: 2,
+  //         autoCompleteMessages: true,
+  //       },
+  //     );
+  //     this.logger.log(
+  //       `[PROCESSOR] Successfully started receiver for queue: ${WHATSAPP_QUEUE_NAME}`,
+  //     );
+  //   } catch (error) {
+  //     this.logger.error(
+  //       `[PROCESSOR] Failed to start receiver for queue ${WHATSAPP_QUEUE_NAME}: error=${error instanceof Error ? error.message : String(error)}`,
+  //       error instanceof Error ? error.stack : undefined,
+  //     );
+  //     throw error;
+  //   }
+  // }
+
+  // onModuleDestroy() {
+  //   // Skip stopping receiver on localhost (receiver was never started)
+  //   if (this.isLocalhost()) {
+  //     return;
+  //   }
+  //
+  //   this.logger.log(
+  //     `[PROCESSOR] Stopping receiver for queue: ${WHATSAPP_QUEUE_NAME}`,
+  //   );
+  //   try {
+  //     await this.queueService.stopReceiver(WHATSAPP_QUEUE_NAME);
+  //     this.logger.log(
+  //       `[PROCESSOR] Successfully stopped receiver for queue: ${WHATSAPP_QUEUE_NAME}`,
+  //     );
+  //   } catch (error) {
+  //     this.logger.error(
+  //       `[PROCESSOR] Failed to stop receiver for queue ${WHATSAPP_QUEUE_NAME}: error=${error instanceof Error ? error.message : String(error)}`,
+  //       error instanceof Error ? error.stack : undefined,
+  //     );
+  //   }
+  // }
 
   async initializeClient(sessionId: string): Promise<void> {
     const initStartTime = Date.now();
@@ -281,7 +334,7 @@ export class WhatsappService implements OnModuleInit, OnModuleDestroy {
 
       let lockAcquired = false;
       try {
-        lockAcquired = await this.acquireSessionLock(sessionId);
+        lockAcquired = await this.sessionService.acquireSessionLock(sessionId);
         if (!lockAcquired) {
           return;
         }
@@ -648,75 +701,6 @@ export class WhatsappService implements OnModuleInit, OnModuleDestroy {
 
     this.initLocks.set(sessionId, initPromise);
     await initPromise;
-  }
-
-  private async acquireSessionLock(sessionId: string): Promise<boolean> {
-    const now = new Date();
-    const expiresAt = new Date(now.getTime() + this.getSessionLockTtlMs());
-    const owner = this.connectionOwnerId;
-    const updated = await this.sessionModel.findOneAndUpdate(
-      {
-        sessionId,
-        $or: [
-          { connectionOwnerExpiresAt: { $exists: false } },
-          { connectionOwnerExpiresAt: null },
-          { connectionOwnerExpiresAt: { $lt: now } },
-          { connectionOwner: owner },
-        ],
-      },
-      {
-        $set: {
-          connectionOwner: owner,
-          connectionOwnerExpiresAt: expiresAt,
-          connectionOwnerHeartbeatAt: now,
-        },
-      },
-      { new: true },
-    );
-
-    if (!updated) {
-      this.logger.warn(
-        `[SERVICE] Session lock already held by another pod; skipping init: sessionId=${sessionId}`,
-      );
-      return false;
-    }
-    return true;
-  }
-
-  private getSessionLockRefreshIntervalMs(): number {
-    return (
-      Number(
-        this.configService.get<string>(
-          'whatsapp.sessionLockRefreshIntervalMs',
-          process.env.WHATSAPP_SESSION_LOCK_REFRESH_INTERVAL_MS || '60000',
-        ),
-      ) || 60000
-    );
-  }
-
-  private async refreshSessionLock(sessionId: string): Promise<void> {
-    const now = new Date();
-    const expiresAt = new Date(now.getTime() + this.getSessionLockTtlMs());
-    await this.sessionModel.updateOne(
-      { sessionId, connectionOwner: this.connectionOwnerId },
-      {
-        $set: {
-          connectionOwnerExpiresAt: expiresAt,
-          connectionOwnerHeartbeatAt: now,
-        },
-      },
-    );
-  }
-
-  private getSessionLockTtlMs(): number {
-    return (
-      Number(
-        this.configService.get<string>(
-          'whatsapp.sessionLockTtlMs',
-          process.env.WHATSAPP_SESSION_LOCK_TTL_MS || '300000',
-        ),
-      ) || 300000
-    );
   }
 
   private getClientBrowserPid(client: Client | undefined): number | undefined {

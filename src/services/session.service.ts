@@ -270,6 +270,39 @@ export class SessionService {
     this.qrGateway.emitStatus(sessionId, { status, message });
   }
 
+  async acquireSessionLock(sessionId: string): Promise<boolean> {
+    const now = new Date();
+    const expiresAt = new Date(now.getTime() + this.getSessionLockTtlMs());
+    const owner = this.connectionOwnerId;
+    const updated = await this.sessionModel.findOneAndUpdate(
+      {
+        sessionId,
+        $or: [
+          { connectionOwnerExpiresAt: { $exists: false } },
+          { connectionOwnerExpiresAt: null },
+          { connectionOwnerExpiresAt: { $lt: now } },
+          { connectionOwner: owner },
+        ],
+      },
+      {
+        $set: {
+          connectionOwner: owner,
+          connectionOwnerExpiresAt: expiresAt,
+          connectionOwnerHeartbeatAt: now,
+        },
+      },
+      { new: true },
+    );
+
+    if (!updated) {
+      this.logger.warn(
+        `[SERVICE] Session lock already held by another pod; skipping init: sessionId=${sessionId}`,
+      );
+      return false;
+    }
+    return true;
+  }
+
   private async refreshSessionLock(sessionId: string): Promise<void> {
     const now = new Date();
     const expiresAt = new Date(now.getTime() + this.getSessionLockTtlMs());
