@@ -1,11 +1,24 @@
-// main.ts
-import { ValidationPipe } from '@nestjs/common';
+// src/main.ts
 import { NestFactory } from '@nestjs/core';
+import { Logger, ValidationPipe } from '@nestjs/common';
 import { AppModule } from './app.module';
 
-const port = process.env.PORT || 3002;
+const PORT = process.env.PORT || 3002;
 
 async function bootstrap() {
+  const logger = new Logger('Bootstrap');
+
+  process.on('unhandledRejection', (reason) => {
+    logger.error(
+      `Unhandled Rejection: ${reason instanceof Error ? reason.message : String(reason)}`,
+      reason instanceof Error ? reason.stack : undefined,
+    );
+  });
+
+  process.on('uncaughtException', (error) => {
+    logger.error(`Uncaught Exception: ${error.message}`, error.stack);
+  });
+
   const app = await NestFactory.create(AppModule);
 
   app.useGlobalPipes(
@@ -16,8 +29,9 @@ async function bootstrap() {
     }),
   );
 
-  await app.listen(port);
+  await app.listen(PORT);
 }
-bootstrap().then(() => {
-  console.log(`🤖 Whatsapp Client Manager Running On Port ${port}`);
+
+void bootstrap().then(() => {
+  console.log(`🤖 Whatsapp Client Manager Running On Port ${PORT}`);
 });
