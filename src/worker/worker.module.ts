@@ -4,7 +4,6 @@ import { MongooseModule } from '@nestjs/mongoose';
 import configuration from '../config/configuration';
 import { ScheduleModule } from '@nestjs/schedule';
 import { Scheduler } from './scheduler/scheduler';
-import { EmailService } from '@/services/email.service';
 import { Entity, EntitySchema } from '@/schemas/entity.schema';
 import { User, UserSchema } from '@/schemas/user.schema';
 import {
@@ -18,6 +17,10 @@ import { ClientService } from '@/services/client.service';
 import { SessionService } from '@/services/session.service';
 import { WhatsappScheduler } from '@/worker/scheduler/whatsapp/whatsapp.scheduler';
 import { WhatsAppHealthService } from '@/services/whatsapp-health.service';
+import { RemoteAuthService } from '@/services/remoteAuth.service';
+import { EmailService } from '@/services/email.service';
+import { EntitiesService } from '@/services/entities.service';
+import { QrGateway } from '@/services/qr.service';
 
 @Module({
   imports: [
@@ -52,13 +55,16 @@ import { WhatsAppHealthService } from '@/services/whatsapp-health.service';
     ]),
   ],
   providers: [
-    WhatsappScheduler,
     Scheduler,
     EmailService,
     WhatsappService,
     ClientService,
     SessionService,
     WhatsAppHealthService,
+    WhatsappScheduler,
+    RemoteAuthService,
+    EntitiesService,
+    QrGateway,
   ],
 })
 export class WorkerModule {}

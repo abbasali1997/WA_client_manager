@@ -5,4 +5,6 @@ export default registerAs('app', () => ({
   baseUrl: process.env.APP_BASE_URL || 'http://localhost:3000',
   port: parseInt(process.env.PORT || '3000', 10),
   internalApiKey: process.env.INTERNAL_API_KEY || '',
+  redisConnectionString:
+    process.env.REDIS_CONNECTION_STRING || 'http://localhost:6379',
 }));

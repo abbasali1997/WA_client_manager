@@ -5,7 +5,10 @@
     "tsBuildInfoFile": "./dist/.tsbuildinfo-worker"
   },
   "include": [
+    "src/worker/main.ts",
+    "src/worker/worker.module.ts",
     "src/worker/**/*.ts",
+    "src/worker/scheduler/**/*.ts",
     "src/config/**/*.ts",
     "src/schemas/**/*.ts",
     "src/services/**/*.ts",
@@ -22,3 +25,21 @@
     "src/**/*.js.map"
   ]
 }
+
+//"include": [
+//"src/main.ts",
+//"src/app.module.ts",
+//"src/config/**/*.ts",
+//"src/controllers/**/*.ts",
+//"src/dtos/**/*.ts",
+//"src/schemas/**/*.ts",
+//"src/services/**/*.ts",
+//"src/tools/**/*.ts"
+//],
+//"exclude": [
+//"src/worker/**/*",
+//"test/**/*",
+//"src/**/*.d.ts",
+//"src/**/*.js",
+//"src/**/*.js.map"
+//]

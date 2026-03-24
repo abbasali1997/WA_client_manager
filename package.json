@@ -14,7 +14,7 @@
     "start:debug": "nest start --debug --watch -r tsconfig-paths/register",
     "start:prod": "node dist/api/main.js",
 
-    "start:worker": "node dist/worker/main.js",
+    "start:worker": "node dist/worker/worker/main.js",
     "start:dev": "nest start --watch -r tsconfig-paths/register",
     "start:worker:dev": "ts-node -r tsconfig-paths/register src/worker/main.ts",
 
